@@ -54,9 +54,40 @@ function render() {
     if (state.active === "text") {
       return `<div class="item">${it.heading ? `<div class="meta"><b>${escapeHtml(it.heading)}</b></div>` : ""}<div class="body">${escapeHtml(it.body)}</div></div>`;
     }
+    if (state.active === "videos") {
+      const thumb = it.thumbnail ? `<img src="${escapeAttr(it.thumbnail)}" style="width:120px;height:68px;object-fit:cover;border-radius:4px;flex-shrink:0;" />` : `<div style="width:120px;height:68px;background:#eef3f6;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#5c6b7a;flex-shrink:0;">${escapeHtml((it.provider||"video").toUpperCase())}</div>`;
+      const playBtn = it.embedUrl && it.embedUrl !== it.url
+        ? `<button data-embed="${escapeAttr(it.embedUrl)}" class="play-inline" style="margin-top:4px;font-size:10px;padding:3px 6px;">▶ Play here</button>`
+        : "";
+      return `<div class="item" style="display:flex;gap:10px;align-items:flex-start;">
+        <a href="${escapeAttr(it.url)}" target="_blank" rel="noopener">${thumb}</a>
+        <div style="flex:1;min-width:0;">
+          <a href="${escapeAttr(it.url)}" target="_blank" rel="noopener" style="font-weight:600;">${escapeHtml(it.title || it.url)}</a>
+          <div class="meta">${escapeHtml(it.provider || it.source)} ${it.id ? "• " + escapeHtml(it.id) : ""}</div>
+          ${playBtn}
+        </div>
+      </div>`;
+    }
     const sub = it.ext ? `${it.ext.toUpperCase()} • ` : it.source ? `${it.source} • ` : "";
     return `<div class="item"><a href="${escapeAttr(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.title || it.url)}</a><div class="meta">${sub}${escapeHtml(it.url)}</div></div>`;
   }).join("");
+
+  list.querySelectorAll(".play-inline").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const embed = e.currentTarget.getAttribute("data-embed");
+      const wrap = e.currentTarget.parentElement;
+      const existing = wrap.querySelector("iframe");
+      if (existing) { existing.remove(); return; }
+      const iframe = document.createElement("iframe");
+      iframe.src = embed;
+      iframe.width = "100%";
+      iframe.height = "180";
+      iframe.style.cssText = "margin-top:6px;border:0;border-radius:4px;";
+      iframe.allow = "autoplay; encrypted-media; picture-in-picture";
+      iframe.allowFullscreen = true;
+      wrap.appendChild(iframe);
+    });
+  });
 }
 
 function normalizeScrapeResult(data) {
