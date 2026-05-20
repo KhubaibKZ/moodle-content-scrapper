@@ -11,9 +11,45 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
       wrap.appendChild(frag);
       root = wrap;
     }
+  } else {
+    // Restrict to the actual course/page content. Moodle pages are full of
+    // navigation, blocks, footer links, breadcrumbs, "jump to" menus etc.
+    // Without this we end up scraping the whole chrome of the LMS.
+    const mainSel = [
+      "#region-main .course-content",
+      "#region-main [role='main']",
+      "#region-main",
+      "[role='main']",
+      "main",
+    ];
+    for (const s of mainSel) {
+      const el = document.querySelector(s);
+      if (el) { root = el; break; }
+    }
+    // Strip side blocks / nav / footer that may live inside region-main on
+    // some Moodle themes.
+    const clone = root.cloneNode(true);
+    clone.querySelectorAll(
+      "nav, header, footer, .navbar, .breadcrumb, .secondary-navigation, " +
+      ".block, [id^='block-region-'], [data-region='blocks-column'], " +
+      ".activity-navigation, .jumpmenu, .single_select, .activity-information, " +
+      ".tertiary-navigation, .moremenu, .activity-altcontent"
+    ).forEach((n) => n.remove());
+    root = clone;
   }
 
   const abs = (u) => { try { return new URL(u, location.href).href; } catch { return u; } };
+  // Force Moodle resource pages to serve the underlying file directly.
+  const directMoodleFile = (href) => {
+    try {
+      const u = new URL(href, location.href);
+      if (/\/mod\/resource\/view\.php$/.test(u.pathname)) {
+        u.searchParams.set("redirect", "1");
+        return u.href;
+      }
+    } catch {}
+    return href;
+  };
   const unique = (arr, key) => {
     const seen = new Set();
     return arr.filter((x) => {
@@ -101,7 +137,13 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
         const m = cls.match(/(pdf|word|powerpoint|excel|document|spreadsheet|presentation|archive)/i);
         if (m) ext = m[1].toLowerCase();
       }
-      documents.push({ type: "document", ext: ext || "unknown", url: abs(href), title: text || href });
+      const finalUrl = isMoodleResource ? directMoodleFile(abs(href)) : abs(href);
+      // Clean up Moodle's noisy link text ("Foo PDF1.3 Mo" etc.)
+      const cleanTitle = (text || href)
+        .replace(/\s+/g, " ")
+        .replace(/\b(PDF|DOCX?|PPTX?|XLSX?|ZIP)\b\s*\d.*$/i, "$1")
+        .trim();
+      documents.push({ type: "document", ext: ext || "unknown", url: finalUrl, title: cleanTitle });
     }
   });
 
