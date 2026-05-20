@@ -12,7 +12,7 @@ async function runScrape() {
 
     // Load scraper source and inject with options.
     const src = await (await fetch(chrome.runtime.getURL("scraper.js"))).text();
-    const wrapped = `const SCRAPE_OPTS = ${JSON.stringify({ selectionOnly })};\nreturn ${src}`;
+    const wrapped = `const SCRAPE_OPTS = ${JSON.stringify({ selectionOnly })};\n${src}\nreturn __MOODLE_SCRAPER_RESULT__;`;
 
     const [result] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -24,7 +24,7 @@ async function runScrape() {
       args: [wrapped],
     });
 
-    state.data = result.result;
+    state.data = normalizeScrapeResult(result && result.result);
     render();
     const total = state.data.text.length + state.data.videos.length + state.data.documents.length + state.data.links.length;
     status.textContent = `Done. ${total} items found on ${new URL(state.data.meta.url).hostname}.`;
@@ -57,6 +57,19 @@ function render() {
     const sub = it.ext ? `${it.ext.toUpperCase()} • ` : it.source ? `${it.source} • ` : "";
     return `<div class="item"><a href="${escapeAttr(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.title || it.url)}</a><div class="meta">${sub}${escapeHtml(it.url)}</div></div>`;
   }).join("");
+}
+
+function normalizeScrapeResult(data) {
+  if (!data || typeof data !== "object") {
+    throw new Error("Scraper did not return data. Reload the Moodle page, then click Scrape again.");
+  }
+  return {
+    meta: data.meta || { url: "", title: "", scrapedAt: new Date().toISOString(), selectionOnly: false },
+    text: Array.isArray(data.text) ? data.text : [],
+    videos: Array.isArray(data.videos) ? data.videos : [],
+    documents: Array.isArray(data.documents) ? data.documents : [],
+    links: Array.isArray(data.links) ? data.links : [],
+  };
 }
 
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
