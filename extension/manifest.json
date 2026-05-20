@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Moodle Content Scraper",
+  "version": "1.0.0",
+  "description": "Scrape and categorize content (text, videos, documents, links) from any Moodle page you're logged into.",
+  "permissions": ["activeTab", "scripting", "storage", "downloads"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "icons": { "48": "icon.png", "128": "icon.png" }
+}
