@@ -26,19 +26,60 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
 
   // -------- Videos --------
   const videos = [];
+  const normalizeVideo = (rawUrl, source, title) => {
+    const url = abs(rawUrl);
+    let provider = "other", id = "", watchUrl = url, embedUrl = url, thumbnail = "";
+    try {
+      const u = new URL(url);
+      const host = u.hostname.replace(/^www\./, "");
+      // YouTube
+      if (/youtube\.com$/.test(host) || host === "youtu.be" || host.endsWith(".youtube.com")) {
+        provider = "youtube";
+        if (host === "youtu.be") id = u.pathname.slice(1);
+        else if (u.pathname.startsWith("/embed/")) id = u.pathname.split("/")[2] || "";
+        else if (u.pathname.startsWith("/watch")) id = u.searchParams.get("v") || "";
+        else if (u.pathname.startsWith("/shorts/")) id = u.pathname.split("/")[2] || "";
+        if (id) {
+          watchUrl = `https://www.youtube.com/watch?v=${id}`;
+          embedUrl = `https://www.youtube.com/embed/${id}`;
+          thumbnail = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+        }
+      } else if (/vimeo\.com$/.test(host) || host.endsWith(".vimeo.com")) {
+        provider = "vimeo";
+        const m = u.pathname.match(/(?:\/video)?\/(\d+)/);
+        if (m) {
+          id = m[1];
+          watchUrl = `https://vimeo.com/${id}`;
+          embedUrl = `https://player.vimeo.com/video/${id}`;
+        }
+      } else if (host.includes("dailymotion.com") || host === "dai.ly") {
+        provider = "dailymotion";
+      } else if (host.includes("loom.com")) {
+        provider = "loom";
+      } else if (host.includes("panopto")) {
+        provider = "panopto";
+      } else if (host.includes("kaltura") || host.includes("mediaspace")) {
+        provider = "kaltura";
+      } else if (/\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(u.pathname)) {
+        provider = "file";
+      }
+    } catch {}
+    return { type: "video", source, provider, id, url: watchUrl, embedUrl, thumbnail, title: title || "" };
+  };
+
   root.querySelectorAll("video").forEach((v) => {
     const src = v.currentSrc || v.src || (v.querySelector("source") && v.querySelector("source").src);
-    if (src) videos.push({ type: "video", source: "html5", url: abs(src), title: v.title || "" });
+    if (src) videos.push(normalizeVideo(src, "html5", v.title || ""));
   });
   const videoHostRe = /(youtube\.com|youtu\.be|vimeo\.com|dailymotion\.com|wistia\.|loom\.com|panopto\.|kaltura\.|mediaspace|video\.|vidyard\.|twitch\.tv|stream\.)/i;
   root.querySelectorAll("iframe").forEach((f) => {
     const src = f.src || f.getAttribute("data-src") || "";
     if (src && videoHostRe.test(src)) {
-      videos.push({ type: "video", source: "iframe", url: abs(src), title: f.title || "" });
+      videos.push(normalizeVideo(src, "iframe", f.title || ""));
     }
   });
   root.querySelectorAll('a[href$=".mp4"], a[href$=".webm"], a[href$=".mov"], a[href$=".m4v"], a[href*="youtube.com/watch"], a[href*="youtu.be/"], a[href*="vimeo.com/"]').forEach((a) => {
-    videos.push({ type: "video", source: "link", url: abs(a.href), title: (a.textContent || "").trim() });
+    videos.push(normalizeVideo(a.href, "link", (a.textContent || "").trim()));
   });
 
   // -------- Documents --------
