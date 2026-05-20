@@ -12,7 +12,7 @@ async function runScrape() {
 
     // Load scraper source and inject with options.
     const src = await (await fetch(chrome.runtime.getURL("scraper.js"))).text();
-    const wrapped = `const SCRAPE_OPTS = ${JSON.stringify({ selectionOnly })};\n${src}`;
+    const wrapped = `const SCRAPE_OPTS = ${JSON.stringify({ selectionOnly })};\nreturn ${src}`;
 
     const [result] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
