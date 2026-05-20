@@ -1,5 +1,5 @@
 // Injected into the Moodle page. Returns categorized content.
-(function scrape(opts) {
+var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
   const selectionOnly = !!(opts && opts.selectionOnly);
 
   let root = document.body;
