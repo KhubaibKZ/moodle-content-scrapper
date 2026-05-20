@@ -13,7 +13,6 @@ function Index() {
       })
       .then((blob) => {
         const a = document.createElement("a");
-        a.href = URL.createObjectURL(a as unknown as Blob extends never ? never : never) as never;
         a.href = URL.createObjectURL(blob);
         a.download = "moodle-scraper.zip";
         a.click();
