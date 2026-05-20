@@ -68,7 +68,19 @@ function render() {
         </div>
       </div>`;
     }
-    const sub = it.ext ? `${it.ext.toUpperCase()} • ` : it.source ? `${it.source} • ` : "";
+    if (state.active === "documents") {
+      const ext = (it.ext || "file").toUpperCase();
+      const dl = it.url + (it.url.includes("?") ? "&" : "?") + "forcedownload=1";
+      return `<div class="item">
+        <div style="font-weight:600;">${escapeHtml(it.title || it.url)}</div>
+        <div class="meta">${escapeHtml(ext)} • ${escapeHtml(it.url)}</div>
+        <div style="margin-top:6px;display:flex;gap:6px;">
+          <a href="${escapeAttr(it.url)}" target="_blank" rel="noopener" style="font-size:11px;padding:3px 8px;border:1px solid #14b8a6;color:#0f766e;border-radius:4px;text-decoration:none;">👁 View</a>
+          <a href="${escapeAttr(dl)}" target="_blank" rel="noopener" style="font-size:11px;padding:3px 8px;background:#14b8a6;color:#fff;border-radius:4px;text-decoration:none;">⬇ Download</a>
+        </div>
+      </div>`;
+    }
+    const sub = it.source ? `${it.source} • ` : "";
     return `<div class="item"><a href="${escapeAttr(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.title || it.url)}</a><div class="meta">${sub}${escapeHtml(it.url)}</div></div>`;
   }).join("");
 
