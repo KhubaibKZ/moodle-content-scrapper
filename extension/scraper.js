@@ -171,33 +171,39 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
     text.push({ type: "text", heading: (heading || "").trim(), body: t });
   };
 
-  const textSelectors = [
-    ".course-content .summary",
-    ".course-content .section .content",
-    ".activityinstance + .contentafterlink",
-    ".no-overflow",            // Moodle label/page content
-    ".box.generalbox",
-    "[role='main'] article",
-    "[role='main'] section",
-    "main article",
-  ];
-  const candidates = root.querySelectorAll(textSelectors.join(","));
-  if (candidates.length) {
-    candidates.forEach((el) => {
-      const h = el.querySelector("h1,h2,h3,h4");
-      pushText(h ? h.textContent : "", el.innerText || el.textContent || "");
-    });
-  } else {
-    // fallback: page paragraphs
-    const main = root.querySelector("[role='main'], main") || root;
-    main.querySelectorAll("h1,h2,h3,h4,p,li").forEach((el) => {
-      const tag = el.tagName.toLowerCase();
-      const t = (el.innerText || el.textContent || "").trim();
-      if (!t) return;
-      if (/^h[1-4]$/.test(tag)) pushText(t, "");
-      else pushText("", t);
-    });
-  }
+  // Walk headings, paragraphs, list items, and blockquotes directly. This
+  // works for both Moodle "page"/"label" activities and section pages where
+  // content sits loose inside the main region.
+  let currentHeading = "";
+  const walker = root.querySelectorAll("h1,h2,h3,h4,h5,p,li,blockquote,td");
+  walker.forEach((el) => {
+    // Skip nodes that are inside something we'd consider noise (tab labels,
+    // nav lists). We already stripped most of this, but tab strips can live
+    // inside the content area.
+    if (el.closest("[role='tablist'], .nav-tabs, .nav-pills, .secondary-navigation, .breadcrumb, .pagination")) return;
+    const tag = el.tagName.toLowerCase();
+    const t = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+    if (!t) return;
+    if (/^h[1-5]$/.test(tag)) {
+      currentHeading = t;
+      pushText("", t); // keep the heading itself as a text item
+    } else {
+      pushText(currentHeading, t);
+    }
+  });
+
+  // -------- Images (added to documents as ext=image) --------
+  root.querySelectorAll("img").forEach((img) => {
+    const src = img.currentSrc || img.src;
+    if (!src) return;
+    if (/^data:/.test(src)) return;
+    // Skip tiny icons / Moodle UI sprites.
+    const w = img.naturalWidth || img.width || 0;
+    const h = img.naturalHeight || img.height || 0;
+    if ((w && w < 80) || (h && h < 80)) return;
+    if (/\/theme\/|\/pix\/|icon|logo|avatar/i.test(src)) return;
+    documents.push({ type: "document", ext: "image", url: abs(src), title: img.alt || "Image" });
+  });
 
   return {
     meta: {
