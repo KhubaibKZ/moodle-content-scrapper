@@ -150,13 +150,21 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
   // -------- Links (everything else external/internal that isn't doc/video) --------
   const knownUrls = new Set([...videos.map((v) => v.url), ...documents.map((d) => d.url)]);
   const links = [];
+  const currentHost = location.hostname.replace(/^www\./, "");
   root.querySelectorAll("a[href]").forEach((a) => {
     const href = a.href;
     if (!href || href.startsWith("javascript:") || href.startsWith("#")) return;
     if (knownUrls.has(href)) return;
     const text = (a.textContent || "").trim();
     if (!text && !a.querySelector("img")) return;
-    links.push({ type: "link", url: abs(href), title: text || href });
+    // Only keep external links — internal Moodle navigation (same hostname)
+    // is noise for the user.
+    let host = "";
+    try { host = new URL(href, location.href).hostname.replace(/^www\./, ""); } catch { return; }
+    if (!host || host === currentHost) return;
+    // Skip mailto/tel which have no hostname anyway (already filtered) and
+    // common tracking/share endpoints.
+    links.push({ type: "link", url: abs(href), title: text || href, source: host });
   });
 
   // -------- Text blocks --------
@@ -192,7 +200,8 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
     }
   });
 
-  // -------- Images (added to documents as ext=image) --------
+  // -------- Images (separate category) --------
+  const images = [];
   root.querySelectorAll("img").forEach((img) => {
     const src = img.currentSrc || img.src;
     if (!src) return;
@@ -202,7 +211,7 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
     const h = img.naturalHeight || img.height || 0;
     if ((w && w < 80) || (h && h < 80)) return;
     if (/\/theme\/|\/pix\/|icon|logo|avatar/i.test(src)) return;
-    documents.push({ type: "document", ext: "image", url: abs(src), title: img.alt || "Image" });
+    images.push({ type: "image", url: abs(src), title: img.alt || "Image", width: w, height: h });
   });
 
   return {
@@ -216,5 +225,6 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
     videos: unique(videos, "url"),
     documents: unique(documents, "url"),
     links: unique(links, "url"),
+    images: unique(images, "url"),
   };
 })(SCRAPE_OPTS);
