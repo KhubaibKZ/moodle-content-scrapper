@@ -87,7 +87,10 @@ function render() {
         <div style="flex:1;min-width:0;">
           <div style="font-weight:600;">${escapeHtml(it.title || "Image")}</div>
           <div class="meta">${it.width || "?"}×${it.height || "?"} • ${escapeHtml(it.url)}</div>
-          <div style="margin-top:6px;"><a href="${escapeAttr(it.url)}" target="_blank" rel="noopener" download style="font-size:11px;padding:3px 8px;background:#14b8a6;color:#fff;border-radius:4px;text-decoration:none;">⬇ Open</a></div>
+          <div style="margin-top:6px;display:flex;gap:6px;">
+            <a href="${escapeAttr(it.url)}" target="_blank" rel="noopener" style="font-size:11px;padding:3px 8px;border:1px solid #14b8a6;color:#0f766e;border-radius:4px;text-decoration:none;">👁 View</a>
+            <button data-img-dl="${escapeAttr(it.url)}" class="img-dl" style="font-size:11px;padding:3px 8px;background:#14b8a6;color:#fff;border:0;border-radius:4px;cursor:pointer;">⬇ Download</button>
+          </div>
         </div>
       </div>`;
     }
@@ -109,6 +112,22 @@ function render() {
       iframe.allow = "autoplay; encrypted-media; picture-in-picture";
       iframe.allowFullscreen = true;
       wrap.appendChild(iframe);
+    });
+  });
+
+  list.querySelectorAll(".img-dl").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      const url = e.currentTarget.getAttribute("data-img-dl");
+      const name = (url.split("/").pop() || "image").split("?")[0] || `image-${Date.now()}.jpg`;
+      try {
+        const res = await fetch(url, { mode: "cors" });
+        const blob = await res.blob();
+        const objUrl = URL.createObjectURL(blob);
+        chrome.downloads.download({ url: objUrl, filename: name });
+      } catch {
+        // Fallback: let Chrome's downloader fetch it directly.
+        chrome.downloads.download({ url, filename: name });
+      }
     });
   });
 }
