@@ -163,9 +163,9 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
   // Prefer Moodle content containers; fall back to article/main.
   const text = [];
   const seenText = new Set();
-  const pushText = (heading, body) => {
+  const pushText = (heading, body, minLen) => {
     const t = (body || "").replace(/\s+/g, " ").trim();
-    if (!t || t.length < 20) return;
+    if (!t || t.length < (minLen != null ? minLen : 20)) return;
     if (seenText.has(t)) return;
     seenText.add(t);
     text.push({ type: "text", heading: (heading || "").trim(), body: t });
@@ -186,7 +186,7 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
     if (!t) return;
     if (/^h[1-5]$/.test(tag)) {
       currentHeading = t;
-      pushText("", t); // keep the heading itself as a text item
+      pushText("", t, 1); // keep headings even if short
     } else {
       pushText(currentHeading, t);
     }
