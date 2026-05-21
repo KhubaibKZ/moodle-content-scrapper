@@ -211,6 +211,13 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
     const h = img.naturalHeight || img.height || 0;
     if ((w && w < 80) || (h && h < 80)) return;
     if (/\/theme\/|\/pix\/|icon|logo|avatar/i.test(src)) return;
+    // Skip video thumbnails (YouTube / Vimeo / etc.) and any <img> that sits
+    // inside a link or figure pointing to a known video host — those belong
+    // to the Videos tab, not Images.
+    if (/ytimg\.com|i\.vimeocdn\.com|vumbnail\.com|img\.youtube\.com|dailymotion\.com\/thumbnail|cdn\.loom\.com|kalturacdn|panopto/i.test(src)) return;
+    const linkParent = img.closest("a[href]");
+    if (linkParent && videoHostRe.test(linkParent.href)) return;
+    if (img.closest("video, .video-js, [class*='video'], [class*='player']")) return;
     images.push({ type: "image", url: abs(src), title: img.alt || "Image", width: w, height: h });
   });
 
