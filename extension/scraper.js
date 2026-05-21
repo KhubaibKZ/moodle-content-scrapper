@@ -33,7 +33,7 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
       "nav, header, footer, .navbar, .breadcrumb, .secondary-navigation, " +
       ".block, [id^='block-region-'], [data-region='blocks-column'], " +
       ".activity-navigation, .jumpmenu, .single_select, .activity-information, " +
-      ".tertiary-navigation, .moremenu, .activity-altcontent"
+      ".tertiary-navigation, .moremenu"
     ).forEach((n) => n.remove());
     root = clone;
   }
