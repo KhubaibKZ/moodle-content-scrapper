@@ -123,6 +123,7 @@ function normalizeScrapeResult(data) {
     videos: Array.isArray(data.videos) ? data.videos : [],
     documents: Array.isArray(data.documents) ? data.documents : [],
     links: Array.isArray(data.links) ? data.links : [],
+    images: Array.isArray(data.images) ? data.images : [],
   };
 }
 
