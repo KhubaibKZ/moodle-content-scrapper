@@ -26,7 +26,7 @@ async function runScrape() {
 
     state.data = normalizeScrapeResult(result && result.result);
     render();
-    const total = state.data.text.length + state.data.videos.length + state.data.documents.length + state.data.links.length;
+    const total = state.data.text.length + state.data.videos.length + state.data.documents.length + state.data.images.length + state.data.links.length;
     status.textContent = `Done. ${total} items found on ${new URL(state.data.meta.url).hostname}.`;
   } catch (e) {
     console.error(e);
@@ -42,6 +42,7 @@ function render() {
   $("c-text").textContent = d.text.length;
   $("c-videos").textContent = d.videos.length;
   $("c-documents").textContent = d.documents.length;
+  $("c-images").textContent = d.images.length;
   $("c-links").textContent = d.links.length;
 
   const list = $("list");
@@ -77,6 +78,16 @@ function render() {
         <div style="margin-top:6px;display:flex;gap:6px;">
           <a href="${escapeAttr(it.url)}" target="_blank" rel="noopener" style="font-size:11px;padding:3px 8px;border:1px solid #14b8a6;color:#0f766e;border-radius:4px;text-decoration:none;">👁 View</a>
           <a href="${escapeAttr(dl)}" target="_blank" rel="noopener" style="font-size:11px;padding:3px 8px;background:#14b8a6;color:#fff;border-radius:4px;text-decoration:none;">⬇ Download</a>
+        </div>
+      </div>`;
+    }
+    if (state.active === "images") {
+      return `<div class="item" style="display:flex;gap:10px;align-items:flex-start;">
+        <a href="${escapeAttr(it.url)}" target="_blank" rel="noopener"><img src="${escapeAttr(it.url)}" style="width:100px;height:100px;object-fit:cover;border-radius:4px;flex-shrink:0;background:#eef3f6;" /></a>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;">${escapeHtml(it.title || "Image")}</div>
+          <div class="meta">${it.width || "?"}×${it.height || "?"} • ${escapeHtml(it.url)}</div>
+          <div style="margin-top:6px;"><a href="${escapeAttr(it.url)}" target="_blank" rel="noopener" download style="font-size:11px;padding:3px 8px;background:#14b8a6;color:#fff;border-radius:4px;text-decoration:none;">⬇ Open</a></div>
         </div>
       </div>`;
     }
