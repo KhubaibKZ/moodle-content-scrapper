@@ -202,6 +202,19 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
 
   // -------- Images (separate category) --------
   const images = [];
+  const isVideoThumbnailImage = (rawSrc, img) => {
+    const src = abs(rawSrc || "");
+    if (!src) return false;
+    // YouTube and similar players expose their posters as normal <img> tags
+    // (for example img.youtube.com/vi/.../maxresdefault.jpg). Treat those as
+    // video thumbnails, never as standalone images.
+    if (/(^|\/\/)(i\.)?ytimg\.com|(^|\/\/)img\.youtube\.com|i\.vimeocdn\.com|vumbnail\.com|dailymotion\.com\/thumbnail|cdn\.loom\.com|kalturacdn|panopto|wistia|vidyard/i.test(src)) return true;
+    if (/\/vi\/[a-z0-9_-]{6,}\/(maxresdefault|hqdefault|mqdefault|sddefault|default)\.(jpe?g|webp|png)(\?|$)/i.test(src)) return true;
+    const linkParent = img && img.closest("a[href]");
+    if (linkParent && videoHostRe.test(linkParent.href)) return true;
+    if (img && img.closest("video, .video-js, [class*='video'], [class*='player'], [data-video], [data-youtube], [data-vimeo]")) return true;
+    return false;
+  };
   root.querySelectorAll("img").forEach((img) => {
     const src = img.currentSrc || img.src;
     if (!src) return;
@@ -214,10 +227,7 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
     // Skip video thumbnails (YouTube / Vimeo / etc.) and any <img> that sits
     // inside a link or figure pointing to a known video host — those belong
     // to the Videos tab, not Images.
-    if (/ytimg\.com|i\.vimeocdn\.com|vumbnail\.com|img\.youtube\.com|dailymotion\.com\/thumbnail|cdn\.loom\.com|kalturacdn|panopto/i.test(src)) return;
-    const linkParent = img.closest("a[href]");
-    if (linkParent && videoHostRe.test(linkParent.href)) return;
-    if (img.closest("video, .video-js, [class*='video'], [class*='player']")) return;
+    if (isVideoThumbnailImage(src, img)) return;
     images.push({ type: "image", url: abs(src), title: img.alt || "Image", width: w, height: h });
   });
 
