@@ -82,6 +82,7 @@ function render() {
       </div>`;
     }
     if (state.active === "images") {
+      const name = getDownloadName(it.url, "image");
       return `<div class="item" style="display:flex;gap:10px;align-items:flex-start;">
         <a href="${escapeAttr(it.url)}" target="_blank" rel="noopener"><img src="${escapeAttr(it.url)}" style="width:100px;height:100px;object-fit:cover;border-radius:4px;flex-shrink:0;background:#eef3f6;" /></a>
         <div style="flex:1;min-width:0;">
@@ -89,7 +90,8 @@ function render() {
           <div class="meta">${it.width || "?"}×${it.height || "?"} • ${escapeHtml(it.url)}</div>
           <div style="margin-top:6px;display:flex;gap:6px;">
             <a href="${escapeAttr(it.url)}" target="_blank" rel="noopener" style="font-size:11px;padding:3px 8px;border:1px solid #14b8a6;color:#0f766e;border-radius:4px;text-decoration:none;">👁 View</a>
-            <button data-img-dl="${escapeAttr(it.url)}" class="img-dl" style="font-size:11px;padding:3px 8px;background:#14b8a6;color:#fff;border:0;border-radius:4px;cursor:pointer;">⬇ Download</button>
+            <a href="${escapeAttr(it.url)}" download="${escapeAttr(name)}" target="_blank" rel="noopener" style="font-size:11px;padding:3px 8px;background:#14b8a6;color:#fff;border-radius:4px;text-decoration:none;">⬇ Download</a>
+            <button data-img-dl="${escapeAttr(it.url)}" data-filename="${escapeAttr(name)}" class="img-dl" style="font-size:11px;padding:3px 8px;background:#0f766e;color:#fff;border:0;border-radius:4px;cursor:pointer;">Save</button>
           </div>
         </div>
       </div>`;
@@ -118,18 +120,28 @@ function render() {
   list.querySelectorAll(".img-dl").forEach((btn) => {
     btn.addEventListener("click", async (e) => {
       const url = e.currentTarget.getAttribute("data-img-dl");
-      const name = (url.split("/").pop() || "image").split("?")[0] || `image-${Date.now()}.jpg`;
+      const name = e.currentTarget.getAttribute("data-filename") || getDownloadName(url, "image");
       try {
         const res = await fetch(url, { mode: "cors" });
+        if (!res.ok) throw new Error("Image download failed");
         const blob = await res.blob();
         const objUrl = URL.createObjectURL(blob);
-        chrome.downloads.download({ url: objUrl, filename: name });
+        chrome.downloads.download({ url: objUrl, filename: name, saveAs: true });
       } catch {
         // Fallback: let Chrome's downloader fetch it directly.
-        chrome.downloads.download({ url, filename: name });
+        chrome.downloads.download({ url, filename: name, saveAs: true });
       }
     });
   });
+}
+
+function getDownloadName(url, fallback) {
+  try {
+    const u = new URL(url);
+    const pathName = decodeURIComponent((u.pathname.split("/").pop() || "").trim());
+    if (pathName && /\.[a-z0-9]{2,5}$/i.test(pathName)) return pathName.replace(/[^a-z0-9._-]/gi, "-");
+  } catch {}
+  return `${fallback || "file"}-${Date.now()}.jpg`;
 }
 
 function normalizeScrapeResult(data) {
