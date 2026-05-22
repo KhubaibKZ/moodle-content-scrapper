@@ -168,37 +168,88 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
   });
 
   // -------- Text blocks --------
-  // Prefer Moodle content containers; fall back to article/main.
-  const text = [];
-  const seenText = new Set();
-  const pushText = (heading, body, minLen) => {
-    const t = (body || "").replace(/\s+/g, " ").trim();
-    if (!t || t.length < (minLen != null ? minLen : 20)) return;
-    if (seenText.has(t)) return;
-    seenText.add(t);
-    text.push({ type: "text", heading: (heading || "").trim(), body: t });
+  // Build a cleaned clone of root: drop player chrome, replace embedded
+  // media / attachments with short bracket placeholders, then group
+  // paragraphs under their nearest heading.
+  const textRoot = root.cloneNode(true);
+
+  // Strip player UI, scripts, and noise that pollute innerText.
+  textRoot.querySelectorAll(
+    "script, style, noscript, " +
+    "[role='tablist'], .nav-tabs, .nav-pills, .secondary-navigation, .breadcrumb, .pagination, " +
+    ".video-js .vjs-control-bar, .vjs-modal-dialog, .vjs-text-track-display, .vjs-control-text, " +
+    "[class^='vjs-'], [class*=' vjs-']"
+  ).forEach((n) => n.remove());
+
+  const replaceWith = (el, label) => {
+    if (!el || !el.parentNode) return;
+    el.parentNode.replaceChild(document.createTextNode(` [${label}] `), el);
   };
 
-  // Walk headings, paragraphs, list items, and blockquotes directly. This
-  // works for both Moodle "page"/"label" activities and section pages where
-  // content sits loose inside the main region.
+  // Replace media embeds with a marker.
+  textRoot.querySelectorAll("video, audio").forEach((el) => replaceWith(el, "Video here"));
+  textRoot.querySelectorAll("iframe").forEach((el) => {
+    const src = el.src || el.getAttribute("data-src") || "";
+    replaceWith(el, videoHostRe.test(src) ? "Video here" : "Embedded content");
+  });
+  // Replace any container that *was* a video player but is now empty of media.
+  textRoot.querySelectorAll(".video-js, [class*='video-player'], [class*='mediaplugin']").forEach((el) => {
+    if (!el.querySelector("video,audio,iframe")) replaceWith(el, "Video here");
+  });
+
+  // Replace document / file links with [Attachment: name].
+  const docUrls = new Set(documents.map((d) => d.url));
+  textRoot.querySelectorAll("a[href]").forEach((a) => {
+    const href = a.href;
+    if (!href) return;
+    const isDoc = docExtRe.test(href) || /\/mod\/(resource|folder|book)\/view\.php/.test(href) || docUrls.has(href) || docUrls.has(abs(href));
+    if (!isDoc) return;
+    const name = (a.textContent || "").replace(/\s+/g, " ").trim() || "file";
+    const clean = name.replace(/\b(PDF|DOCX?|PPTX?|XLSX?|ZIP)\b\s*\d.*$/i, "$1").trim();
+    replaceWith(a, `Attachment: ${clean}`);
+  });
+
+  const text = [];
+  const seenBodies = new Set();
+  const cleanInline = (s) => (s || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  // Walk in document order, grouping paragraphs/lists under the latest heading.
   let currentHeading = "";
-  const walker = root.querySelectorAll("h1,h2,h3,h4,h5,p,li,blockquote,td");
-  walker.forEach((el) => {
-    // Skip nodes that are inside something we'd consider noise (tab labels,
-    // nav lists). We already stripped most of this, but tab strips can live
-    // inside the content area.
-    if (el.closest("[role='tablist'], .nav-tabs, .nav-pills, .secondary-navigation, .breadcrumb, .pagination")) return;
+  let buffer = [];
+  const flush = () => {
+    const body = cleanInline(buffer.join("\n\n"));
+    buffer = [];
+    if (!body) return;
+    const key = (currentHeading + "||" + body).toLowerCase();
+    if (seenBodies.has(key)) return;
+    seenBodies.add(key);
+    text.push({ type: "text", heading: currentHeading, body });
+  };
+
+  const blockSel = "h1,h2,h3,h4,h5,h6,p,li,blockquote,pre,figcaption,td";
+  textRoot.querySelectorAll(blockSel).forEach((el) => {
+    // Skip nested blocks — outer block's innerText already contains them.
+    if (el.parentElement && el.parentElement.closest("p,li,blockquote,pre,figcaption")) return;
     const tag = el.tagName.toLowerCase();
-    const t = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
-    if (!t) return;
-    if (/^h[1-5]$/.test(tag)) {
-      currentHeading = t;
-      pushText("", t, 1); // keep headings even if short
+    const raw = cleanInline(el.innerText || el.textContent || "");
+    if (!raw) return;
+    if (/^h[1-6]$/.test(tag)) {
+      flush();
+      currentHeading = raw;
+      return;
+    }
+    if (tag === "li") {
+      buffer.push("• " + raw);
     } else {
-      pushText(currentHeading, t);
+      buffer.push(raw);
     }
   });
+  flush();
 
   // -------- Images (separate category) --------
   const images = [];
