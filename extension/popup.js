@@ -53,7 +53,7 @@ function render() {
   }
   list.innerHTML = items.map((it) => {
     if (state.active === "text") {
-      return `<div class="item">${it.heading ? `<div class="meta"><b>${escapeHtml(it.heading)}</b></div>` : ""}<div class="body">${escapeHtml(it.body)}</div></div>`;
+      return `<div class="item">${it.heading ? `<div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#0f172a;">${escapeHtml(it.heading)}</div>` : ""}<div class="body" style="white-space:pre-wrap;line-height:1.5;">${escapeHtml(it.body)}</div></div>`;
     }
     if (state.active === "videos") {
       const thumb = it.thumbnail ? `<img src="${escapeAttr(it.thumbnail)}" style="width:120px;height:68px;object-fit:cover;border-radius:4px;flex-shrink:0;" />` : `<div style="width:120px;height:68px;background:#eef3f6;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#5c6b7a;flex-shrink:0;">${escapeHtml((it.provider||"video").toUpperCase())}</div>`;
