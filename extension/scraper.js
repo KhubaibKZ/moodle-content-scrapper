@@ -176,6 +176,7 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
   // Strip player UI, scripts, and noise that pollute innerText.
   textRoot.querySelectorAll(
     "script, style, noscript, " +
+    ".accesshide, .sr-only, .visually-hidden, .visuallyhidden, [aria-hidden='true'], " +
     "[role='tablist'], .nav-tabs, .nav-pills, .secondary-navigation, .breadcrumb, .pagination, " +
     ".video-js .vjs-control-bar, .vjs-modal-dialog, .vjs-text-track-display, .vjs-control-text, " +
     "[class^='vjs-'], [class*=' vjs-']"
@@ -197,16 +198,40 @@ var __MOODLE_SCRAPER_RESULT__ = (function scrape(opts) {
     if (!el.querySelector("video,audio,iframe")) replaceWith(el, "Video here");
   });
 
-  // Replace document / file links with [Attachment: name].
+  // Replace standalone images with [Image: alt].
+  textRoot.querySelectorAll("img").forEach((img) => {
+    const src = img.currentSrc || img.src || "";
+    if (!src || /^data:/.test(src)) { replaceWith(img, "Image"); return; }
+    if (/\/theme\/|\/pix\/|icon|logo|avatar/i.test(src)) { if (img.parentNode) img.parentNode.removeChild(img); return; }
+    const w = img.naturalWidth || img.width || 0;
+    const h = img.naturalHeight || img.height || 0;
+    if ((w && w < 80) || (h && h < 80)) { if (img.parentNode) img.parentNode.removeChild(img); return; }
+    const alt = (img.alt || "").trim();
+    replaceWith(img, alt ? `Image: ${alt}` : "Image");
+  });
+
+  // Replace document / file / external links with bracket placeholders.
   const docUrls = new Set(documents.map((d) => d.url));
+  const videoUrls = new Set(videos.map((v) => v.url));
+  const linkUrls = new Set(links.map((l) => l.url));
   textRoot.querySelectorAll("a[href]").forEach((a) => {
     const href = a.href;
     if (!href) return;
+    const name = (a.textContent || "").replace(/\s+/g, " ").trim();
     const isDoc = docExtRe.test(href) || /\/mod\/(resource|folder|book)\/view\.php/.test(href) || docUrls.has(href) || docUrls.has(abs(href));
-    if (!isDoc) return;
-    const name = (a.textContent || "").replace(/\s+/g, " ").trim() || "file";
-    const clean = name.replace(/\b(PDF|DOCX?|PPTX?|XLSX?|ZIP)\b\s*\d.*$/i, "$1").trim();
-    replaceWith(a, `Attachment: ${clean}`);
+    if (isDoc) {
+      const clean = (name || "file").replace(/\b(PDF|DOCX?|PPTX?|XLSX?|ZIP)\b\s*\d.*$/i, "$1").trim();
+      replaceWith(a, `Attachment: ${clean}`);
+      return;
+    }
+    if (videoHostRe.test(href) || videoUrls.has(href) || videoUrls.has(abs(href))) {
+      replaceWith(a, name ? `Video: ${name}` : "Video here");
+      return;
+    }
+    if (linkUrls.has(href) || linkUrls.has(abs(href))) {
+      replaceWith(a, name ? `Link: ${name}` : "Link");
+      return;
+    }
   });
 
   const text = [];
