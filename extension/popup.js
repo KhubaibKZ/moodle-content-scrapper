@@ -185,3 +185,124 @@ $("download").addEventListener("click", () => {
   const name = `moodle-scrape-${Date.now()}.json`;
   chrome.downloads.download({ url, filename: name, saveAs: true });
 });
+
+$("downloadContent").addEventListener("click", downloadContentBundle);
+
+async function downloadContentBundle() {
+  if (!state.data) return;
+  const btn = $("downloadContent");
+  btn.disabled = true;
+  const status = $("status");
+  status.textContent = "Packaging content...";
+  try {
+    const d = state.data;
+    const zip = new JSZip();
+    const safe = (s) => String(s || "").replace(/[\\/:*?"<>|\n\r\t]+/g, "_").slice(0, 120);
+    const host = (() => { try { return new URL(d.meta.url).hostname; } catch { return "moodle"; } })();
+    const folderName = `moodle-${safe(d.meta.title || host)}-${Date.now()}`;
+    const root = zip.folder(folderName);
+
+    // --- text.txt (clean readable) ---
+    const textLines = [];
+    textLines.push(d.meta.title || "");
+    textLines.push(d.meta.url || "");
+    textLines.push("Scraped: " + (d.meta.scrapedAt || ""));
+    textLines.push("=".repeat(60), "");
+    d.text.forEach((t) => {
+      if (t.heading) textLines.push(t.heading, "-".repeat(t.heading.length));
+      textLines.push(t.body, "");
+    });
+    root.file("text.txt", textLines.join("\n"));
+    // text.doc — Word opens HTML with .doc extension cleanly.
+    root.file("text.doc", buildWordHtml(d));
+
+    // --- videos.txt / links.txt ---
+    if (d.videos.length) {
+      root.file("videos.txt", d.videos.map((v) =>
+        `${v.title || "(untitled)"}\n  Provider: ${v.provider || v.source}\n  URL: ${v.url}${v.embedUrl && v.embedUrl !== v.url ? `\n  Embed: ${v.embedUrl}` : ""}\n`
+      ).join("\n"));
+    }
+    if (d.links.length) {
+      root.file("links.txt", d.links.map((l) => `${l.title || l.url}\n  ${l.url}\n`).join("\n"));
+    }
+
+    // index.json always
+    root.file("index.json", JSON.stringify(d, null, 2));
+
+    // --- images/ ---
+    const imgFolder = d.images.length ? root.folder("images") : null;
+    const docFolder = d.documents.length ? root.folder("documents") : null;
+    const failures = [];
+    const used = new Set();
+    const uniqName = (base) => {
+      let n = base, i = 1;
+      while (used.has(n)) { const dot = base.lastIndexOf("."); n = dot > 0 ? `${base.slice(0,dot)}-${i}${base.slice(dot)}` : `${base}-${i}`; i++; }
+      used.add(n); return n;
+    };
+
+    let done = 0;
+    const total = d.images.length + d.documents.length;
+    const tick = (label) => { done++; status.textContent = `Downloading ${done}/${total}: ${label}`; };
+
+    for (const img of d.images) {
+      const name = uniqName(safe(getDownloadName(img.url, "image")));
+      try {
+        const blob = await (await fetch(img.url, { mode: "cors", credentials: "include" })).blob();
+        imgFolder.file(name, blob);
+      } catch (e) { failures.push(`image: ${img.url}`); }
+      tick(name);
+    }
+    for (const doc of d.documents) {
+      const url = doc.url + (doc.url.includes("?") ? "&" : "?") + "forcedownload=1";
+      const fallback = `${safe(doc.title || "document")}.${(doc.ext || "pdf").toLowerCase()}`;
+      const name = uniqName(safe(getDownloadName(doc.url, "document") || fallback));
+      try {
+        const res = await fetch(url, { mode: "cors", credentials: "include" });
+        if (!res.ok) throw new Error(res.status);
+        docFolder.file(name, await res.blob());
+      } catch (e) { failures.push(`document: ${doc.url}`); }
+      tick(name);
+    }
+
+    if (failures.length) {
+      root.file("FAILED.txt", "Could not fetch these resources (CORS or auth):\n\n" + failures.join("\n"));
+    }
+
+    status.textContent = "Building zip...";
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(zipBlob);
+    chrome.downloads.download({ url, filename: `${folderName}.zip`, saveAs: true });
+    status.textContent = `Done. ${total - failures.length}/${total} files saved${failures.length ? `, ${failures.length} failed` : ""}.`;
+  } catch (e) {
+    console.error(e);
+    status.textContent = "Error: " + (e.message || e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function buildWordHtml(d) {
+  const esc = (s) => escapeHtml(s).replace(/\n/g, "<br/>");
+  const parts = [
+    `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>`,
+    `<head><meta charset='utf-8'><title>${escapeHtml(d.meta.title || "Moodle content")}</title></head><body>`,
+    `<h1>${escapeHtml(d.meta.title || "")}</h1>`,
+    `<p style='color:#666'>${escapeHtml(d.meta.url || "")}</p><hr/>`,
+  ];
+  d.text.forEach((t) => {
+    if (t.heading) parts.push(`<h2>${escapeHtml(t.heading)}</h2>`);
+    parts.push(`<p>${esc(t.body)}</p>`);
+  });
+  if (d.videos.length) {
+    parts.push(`<h2>Videos</h2><ul>`);
+    d.videos.forEach((v) => parts.push(`<li><a href='${escapeAttr(v.url)}'>${escapeHtml(v.title || v.url)}</a> (${escapeHtml(v.provider || "")})</li>`));
+    parts.push(`</ul>`);
+  }
+  if (d.links.length) {
+    parts.push(`<h2>Links</h2><ul>`);
+    d.links.forEach((l) => parts.push(`<li><a href='${escapeAttr(l.url)}'>${escapeHtml(l.title || l.url)}</a></li>`));
+    parts.push(`</ul>`);
+  }
+  parts.push(`</body></html>`);
+  return parts.join("\n");
+}
